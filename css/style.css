@@ -25,7 +25,6 @@ form img{
     display: flex;
     justify-content: space-around;
     margin-top: 30px;
-    font-weight: bold;
 }
 
 .card a{
@@ -34,5 +33,5 @@ form img{
 
 img{
     height: 230px;
-    width: 294px;
+    width: auto;
 }
