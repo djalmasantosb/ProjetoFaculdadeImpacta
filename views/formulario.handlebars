@@ -1,9 +1,13 @@
 <main>
-
     {{!-- Formulário --}}
     <div class="container">
         <div class="row">
             <div class="col-6 offset-3">
+
+                {{!-- Mensagens --}}
+                
+                {{>mensagens}}
+
                 <form action="/cadastrar" method="POST" enctype="multipart/form-data">
                     <input type="text"   name="nome" class="form-control" placeholder="Nome do produto">
                     <input type="number" name="valor" class="form-control" placeholder="Valor do produto">

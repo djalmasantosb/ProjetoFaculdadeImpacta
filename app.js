@@ -28,8 +28,15 @@ app.use('/css', express.static('./css'));
 // Referenciar a pasta de imagens
 app.use('/imagens', express.static('./imagens'));
 
-// Config do express-handlebars
-app.engine('handlebars', engine());
+// Configuração do express-handlebars
+app.engine('handlebars', engine({
+    helpers: {
+      // Função auxiliar para verificar igualdade
+      condicionalIgualdade: function (parametro1, parametro2, options) {
+        return parametro1 === parametro2 ? options.fn(this) : options.inverse(this);
+      }
+    }
+  }));
 app.set('view engine', 'handlebars');
 app.set('views', './views');
 
@@ -64,51 +71,75 @@ app.get('/', function(req, res){
     });
 });
 
+// Rota principal contendo a situação
+app.get('/:situacao', function(req, res){
+    // SQL
+    let sql = 'SELECT * FROM produtos';
+
+    // Executar comando SQL
+    conexao.query(sql, function(erro, retorno){
+        res.render('formulario', {produtos:retorno, situacao: req.params.situacao});
+    });
+});
+
 // Rota de cadastro
 app.post('/cadastrar', function(req, res){
-   // Obter os dados que serão utilizados para o cadastro
-   let nome = req.body.nome;
-   let valor = req.body.valor;
-   let imagem = req.files.imagem.name;
+   try{
+    // Obter os dados que serão utilizados para o cadastro
+    let nome = req.body.nome;
+    let valor = req.body.valor;
+    let imagem = req.files.imagem.name;
 
-   // SQL
-   let sql = `INSERT INTO produtos (nome, valor, imagem) VALUES ('${nome}', ${valor}, '${imagem}')`;
+    // Validar o nome do produto e valor
+    if (nome == '' || valor == '' || isNaN(valor)){
+        res.redirect('/falhaCadastro');
+    }else{
+        // SQL
+        let sql = `INSERT INTO produtos (nome, valor, imagem) VALUES ('${nome}', ${valor}, '${imagem}')`;
 
-   // Executar comando SQL
-   conexao.query(sql, function(erro, retorno){
-        // Caso ocorra algum erro
-        if(erro) throw erro;
+        // Executar comando SQL
+        conexao.query(sql, function(erro, retorno){
+            // Caso ocorra algum erro
+            if(erro) throw erro;
 
-        // Caso ocorra o cadastro
-        req.files.imagem.mv(__dirname+'/imagens/'+req.files.imagem.name);
-        console.log(retorno);
-   });
+            // Caso ocorra o cadastro
+            req.files.imagem.mv(__dirname+'/imagens/'+req.files.imagem.name);
+            console.log(retorno);
+        });
 
-   // Retornar para a rota principal
-   res.redirect('/');
+        // Retornar para a rota principal
+        res.redirect('/okCadastro');
+    }
+   }catch(erro){
+    res.redirect('/falhaCadastro');
+   }
 });
 
 
 // Rota para remover produtos
 app.get('/remover/:codigo&:imagem', function(req, res){
     
-    // SQL
-    let sql = `DELETE FROM produtos WHERE codigo = ${req.params.codigo}`;
+    // Tratativa de exceção
+    try{
+        // SQL
+        let sql = `DELETE FROM produtos WHERE codigo = ${req.params.codigo}`;
 
-    // Executar o comando SQL
-    conexao.query(sql, function(erro, retorno){
-        // Caso falhe o comando SQL
-        if(erro) throw erro;
+        // Executar o comando SQL
+        conexao.query(sql, function(erro, retorno){
+            // Caso falhe o comando SQL
+            if(erro) throw erro;
 
-        // Caso o comando SQL funcione
-        fs.unlink(__dirname+'/imagens/'+req.params.imagem, (erro_imagem)=>{
-            console.log('Falha ao remover a imagem ');
+            // Caso o comando SQL funcione
+            fs.unlink(__dirname+'/imagens/'+req.params.imagem, (erro_imagem)=>{
+                console.log('Falha ao remover a imagem');
+            });
         });
-    });
 
-    // Redirecionamento
-    res.redirect('/');
-
+        // Redirecionamento
+        res.redirect('/okRemover');
+    }catch(erro){
+        res.redirect('/falhaRemover');
+    }
 });
 
 // Rota para redirecionar para o formulário de alteração/edição
@@ -136,41 +167,46 @@ app.post('/editar', function(req, res){
     let codigo = req.body.codigo;
     let nomeImagem = req.body.nomeImagem;
 
-    // Definir o tipo de edição
-    try{
-        // Objeto de imagem
-        let imagem = req.files.imagem;
+    // Validar nome do produto e valor
+    if(nome == '' || valor == '' || isNaN(valor)){
+        res.redirect('/falhaEdicao');
+    }else{
+        // Definir o tipo de edição
+        try{
+            // Objeto de imagem
+            let imagem = req.files.imagem;
 
-        // SQL
-        let sql = `UPDATE produtos SET nome='${nome}', valor=${valor}, imagem='${imagem.name}' WHERE codigo=${codigo}`;
+            // SQL
+            let sql = `UPDATE produtos SET nome='${nome}', valor=${valor}, imagem='${imagem.name}' WHERE codigo=${codigo}`;
 
-        // Executar comando SQL
-        conexao.query(sql, function(erro, retorno){
-            // Caso falhe o comando SQL
-            if(erro) throw erro;
+            // Executar comando SQL
+            conexao.query(sql, function(erro, retorno){
+                // Caso falhe o comando SQL
+                if(erro) throw erro;
 
-            // Remover imagem antiga
-            fs.unlink(__dirname+'/imagens/'+nomeImagem, (erro_imagem)=>{
-                console.log('Falha ao remover a imagem.');
+                // Remover imagem antiga
+                fs.unlink(__dirname+'/imagens/'+nomeImagem, (erro_imagem)=>{
+                    console.log('Falha ao remover a imagem.');
+                });
+
+                // Cadastrar nova imagem
+                imagem.mv(__dirname+'/imagens/'+imagem.name);
             });
 
-            // Cadastrar nova imagem
-            imagem.mv(__dirname+'/imagens/'+imagem.name);
-        });
+        }catch(erro){
+            // SQL
+            let sql = `UPDATE produtos SET nome='${nome}', valor=${valor} WHERE codigo=${codigo}`;
 
-    }catch(erro){
-        // SQL
-        let sql = `UPDATE produtos SET nome='${nome}', valor=${valor} WHERE codigo=${codigo}`;
+            // Executar comando SQL
+            conexao.query(sql, function(erro, retorno){
+                // Caso falhe o comando SQL
+                if(erro) throw erro;
+            });
+        }
 
-           // Executar comando SQL
-           conexao.query(sql, function(erro, retorno){
-            // Caso falhe o comando SQL
-            if(erro) throw erro;
-        });
+        // Redirecionamento
+        res.redirect('/okEdicao');
     }
-
-    // Redirecionamento
-    res.redirect('/');
 });
 
 // Servidor
